@@ -7,7 +7,6 @@ var f: File
 var inputbuffer: array[100, uint8]
 var bytesread: int
 var indexlocation = 0
-var bufferindex = 0
 
 type
     NBTKind = enum  # the different node types
@@ -17,7 +16,12 @@ type
         tagByte,
         tagShort,
         tagInt,
-        tagLong
+        tagLong,
+        tagFloat,
+        tagDouble,
+        tagByteArray,
+        tagIntArray,
+        tagLongArray
     NBTNode = ref NBTNodeObj
     NBTNodeObj = object
         name: string
@@ -34,15 +38,23 @@ type
             int32value: int32
         of tagLong:
             int64value: int64
+        of tagFloat:
+            float32value: float32
+        of tagDouble:
+            float64value: float64
+        of tagByteArray:
+            byteArrayValue: seq[int8]
+        of tagIntArray:
+            intArrayValue: seq[int32]
+        of tagLongArray:
+            longArrayValue: seq[int64]
 
 proc readByte(): uint8 =
     if (indexlocation >= buffersize):
         indexlocation = 0
-        bytesread = readBytes(f, inputbuffer, bufferindex, buffersize)
-        bufferindex += 100
+        bytesread = readBytes(f, inputbuffer, 0, buffersize)
     result = inputbuffer[indexlocation]
     indexlocation += 1
-    #echo indexlocation
 
 proc readString(): string = 
     var length: uint16 = readByte()
@@ -91,6 +103,36 @@ proc readInt64(): int64 =
     a += readByte()
     return cast[int64](a)
 
+proc readFloat32(): float32 =
+    var a: uint32 = 0
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    return cast[float32](a)
+
+proc readFloat64(): float64 =
+    var a: uint64 = 0
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    a = a shl 8
+    a += readByte()
+    return cast[float64](a)
+
 proc readNode(tagID: uint8): NBTNode =
     case tagID
     of 8:
@@ -108,6 +150,30 @@ proc readNode(tagID: uint8): NBTNode =
     of 4:
         result = NBTNode(kind: tagLong)
         result.int64value = readInt64()
+    of 5:
+        result = NBTNode(kind: tagFloat)
+        result.float32value = readFloat32()
+    of 6:
+        result = NBTNode(kind: tagDouble)
+        result.float64value = readFloat64()
+    of 7:
+        result = NBTNode(kind: tagByteArray)
+        result.byteArrayValue = newSeq[int8](0)
+        let length = readInt32()
+        for _ in 1..length:
+            result.byteArrayValue.add(readInt8())
+    of 11:
+        result = NBTNode(kind: tagIntArray)
+        result.intArrayValue = newSeq[int32](0)
+        let length = readInt32()
+        for _ in 1..length:
+            result.intArrayValue.add(readInt32())
+    of 12:
+        result = NBTNode(kind: tagLongArray)
+        result.longArrayValue = newSeq[int64](0)
+        let length = readInt64()
+        for _ in 1..length:
+            result.longArrayValue.add(readInt64())
     else:
         echo "no"
     
@@ -126,7 +192,7 @@ proc readTagCompoundOrList(named: bool, isList: bool): NBTNode =
         if length > 0:
             for _ in 1..length:
                 case tagID
-                of 1, 2, 3, 4, 8:
+                of 1, 2, 3, 4, 5, 6, 7, 8, 11, 12:
                     result.entries.add(readNode(tagID))
                 of 9:
                     result.entries.add(readTagCompoundOrList(false, true))
@@ -138,7 +204,7 @@ proc readTagCompoundOrList(named: bool, isList: bool): NBTNode =
         while true:
             var a = readByte()
             case a
-            of 1, 2, 3, 4, 8:
+            of 1, 2, 3, 4, 5, 6, 7, 8, 11, 12:
                 var name = readString()
                 var b = readNode(a)
                 b.name = name
@@ -151,10 +217,11 @@ proc readTagCompoundOrList(named: bool, isList: bool): NBTNode =
                 break
             else:
                 echo "bad nbt type"
+                echo a
                 break
     
 
-if open(f, "test3.nbt"):
+if open(f, "bigtest.nbt"):
     bytesread = readBytes(f, inputbuffer, 0, buffersize)
     if (bytesread > 0 and readByte() == 10):
         let a = readTagCompoundOrList(named = true, isList = false)
