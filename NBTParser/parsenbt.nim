@@ -7,6 +7,7 @@ var f: File
 var inputbuffer: array[100, uint8]
 var bytesread: int
 var indexlocation = 0
+var bufferindex = 0
 
 type
     NBTKind = enum  # the different node types
@@ -37,7 +38,8 @@ type
 proc readByte(): uint8 =
     if (indexlocation >= buffersize):
         indexlocation = 0
-        bytesread = readBytes(f, inputbuffer, 0, buffersize) # todo hardcoding 0 ~~may be~~ is broken
+        bytesread = readBytes(f, inputbuffer, bufferindex, buffersize)
+        bufferindex += 100
     result = inputbuffer[indexlocation]
     indexlocation += 1
     #echo indexlocation
